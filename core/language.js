@@ -3,56 +3,73 @@ const fs = require("fs");
 const path = require("path");
 const config = require("./config");
 
-const languageCache = new Map();
+const languagesPath = path.join(__dirname, "..", "languages");
+const cache = new Map();
 
-function loadLanguage(language) {
+function loadLanguage(language = config.language) {
   const code = String(language || "en").toLowerCase();
-  const filePath = path.join(
-    __dirname,
-    "..",
-    "languages",
-    `${code}.lang`
-  );
 
-  if (languageCache.has(code)) {
-    return languageCache.get(code);
+  if (cache.has(code)) {
+    return cache.get(code);
   }
+
+  const filePath = path.join(languagesPath, `${code}.lang`);
 
   if (!fs.existsSync(filePath)) {
     if (code !== "en") {
       return loadLanguage("en");
     }
 
-    throw new Error("Default language file languages/en.lang is missing.");
+    throw new Error("[Language] languages/en.lang not found.");
   }
 
-  const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  let messages;
 
-  languageCache.set(code, data);
+  try {
+    messages = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    throw new Error(
+      `[Language] Invalid ${code}.lang: ${error.message}`
+    );
+  }
 
-  return data;
+  if (
+    !messages ||
+    typeof messages !== "object" ||
+    Array.isArray(messages)
+  ) {
+    throw new Error(`[Language] ${code}.lang must contain a JSON object.`);
+  }
+
+  cache.set(code, messages);
+  return messages;
 }
 
 function getText(key, replacements = {}, language = config.language) {
   const messages = loadLanguage(language);
-  let result = messages[key];
+  let message = messages[key];
 
-  if (typeof result !== "string") {
-    result = loadLanguage("en")[key];
+  if (typeof message !== "string") {
+    message = loadLanguage("en")[key];
   }
 
-  if (typeof result !== "string") {
+  if (typeof message !== "string") {
     return key;
   }
 
-  for (const [name, value] of Object.entries(replacements)) {
-    result = result.replaceAll(`{${name}}`, String(value));
-  }
+  return message.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, name) => {
+    return Object.prototype.hasOwnProperty.call(replacements, name)
+      ? String(replacements[name])
+      : match;
+  });
+}
 
-  return result;
+function clearLanguageCache() {
+  cache.clear();
 }
 
 module.exports = {
+  loadLanguage,
   getText,
-  loadLanguage
+  clearLanguageCache
 };
