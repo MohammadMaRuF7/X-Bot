@@ -1,0 +1,7 @@
+services:
+  - type: worker
+    name: primex-bot
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
