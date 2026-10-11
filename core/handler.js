@@ -1,75 +1,71 @@
-
 const config = require("./config");
+const { getRuntime, getPrefix } = require("./runtime");
+const { getCommand } = require("./loader");
 const { canRun, isBotAdmin } = require("./permissions");
 const { getText } = require("./language");
+const logger = require("../utils/logger");
 
-function createHandler(commands) {
-  return async function handleMessage(ctx) {
-    if (!ctx.message?.text || !ctx.from) return;
+async function handleMessage(ctx) {
+  const text = ctx.message?.text;
 
-    const text = ctx.message.text.trim();
-    if (!text) return;
+  if (!text || !ctx.from) return;
 
-    const prefix = config.prefix || "!";
-    const admin = isBotAdmin(ctx.from.id);
-    const adminUsePrefix = config.features.adminUsePrefix === true;
+  const runtime = getRuntime();
+  const admin = isBotAdmin(ctx.from.id);
 
-    const hasPrefix = text.startsWith(prefix);
-    const prefixRequired = !admin || adminUsePrefix;
+  if (ctx.from.is_bot && !runtime.features.botToBot) return;
 
-    if (prefixRequired && !hasPrefix) return;
+  if (config.features.adminOnly && !admin) return;
 
-    if (!prefixRequired && !hasPrefix && text.startsWith("/")) {
-      return;
-    }
+  const prefix = getPrefix(ctx.chat?.id);
+  let body = text;
 
-    const input = hasPrefix
-      ? text.slice(prefix.length).trim()
-      : text;
+  if (text.startsWith(prefix)) {
+    body = text.slice(prefix.length).trim();
+  } else if (!admin || runtime.features.adminUsePrefix) {
+    return;
+  }
 
-    if (!input) return;
+  if (!body) return;
 
-    const [name, ...args] = input.split(/\s+/);
-    const command = commands.get(name.toLowerCase());
+  const parts = body.split(/\s+/);
+  const commandName = parts.shift().toLowerCase();
+  const args = parts;
 
-    if (!command) return;
+  const command = getCommand(commandName);
 
-    const requiredRole = Number(command.config.role ?? 0);
+  if (!command) return;
 
-    if (![0, 1, 2].includes(requiredRole)) {
-      console.error(
-        `[Handler] Invalid role for ${command.config.name}`
-      );
-      return;
-    }
+  if (!(await canRun(ctx, command.config.role))) {
+    const denied = getText("permission.denied", runtime.language);
 
-    const allowed = await canRun(ctx, requiredRole);
+    await ctx.reply(
+      typeof denied === "string"
+        ? denied
+        : "⛔ তোমার এই command ব্যবহার করার অনুমতি নেই।"
+    );
 
-    if (!allowed) {
-      await ctx.reply(
-        getText("no_permission", {}, config.language)
-      );
-      return;
-    }
+    return;
+  }
 
-    try {
-      await command.execute({
-        ctx,
-        args,
-        config,
-        command: command.config
-      });
-    } catch (error) {
-      console.error(
-        `[Command: ${command.config.name}]`,
-        error
-      );
+  try {
+    await command.execute({
+      ctx,
+      args,
+      config,
+      runtime,
+      prefix,
+      command: command.config,
+      getText
+    });
+  } catch (error) {
+    logger.error(
+      `Command ${commandName} failed: ${error.stack || error.message}`
+    );
 
-      await ctx.reply(
-        getText("command_error", {}, config.language)
-      );
-    }
-  };
+    await ctx.reply("❌ Command চালাতে সমস্যা হয়েছে। পরে আবার চেষ্টা করো।")
+      .catch(() => {});
+  }
 }
 
-module.exports = { createHandler };
+module.exports = { handleMessage };
