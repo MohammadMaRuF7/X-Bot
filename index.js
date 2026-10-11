@@ -3,47 +3,44 @@ const express = require("express");
 const { Bot } = require("grammy");
 const config = require("./core/config");
 const { loadEvents } = require("./core/eventLoader");
+const { initDatabase, closeDatabase } = require("./database");
+const { registerBusinessEvents } = require("./services/business");
 
 const app = express();
 const bot = new Bot(config.botToken);
 
-let shuttingDown = false;
-let healthServer;
+let server;
+let stopping = false;
 
-app.get(
-  config.hosting?.healthPath || "/health",
-  (req, res) => {
-    res.status(200).json({
-      success: true,
-      status: shuttingDown ? "shutting_down" : "healthy",
-      bot: config.nickname,
-      timestamp: new Date().toISOString()
-    });
-  }
-);
+app.get(config.hosting?.healthPath || "/health", (req, res) => {
+  res.status(stopping ? 503 : 200).json({
+    success: !stopping,
+    status: stopping ? "shutting_down" : "healthy",
+    bot: config.nickname,
+    timestamp: new Date().toISOString()
+  });
+});
 
 bot.catch((error) => {
-  console.error(
-    "[PrimeX-Bot] Telegram update error:",
-    error.message
-  );
+  console.error("[Telegram]", error.message);
 });
 
 async function start() {
-  const port = Number(config.hosting?.port || 3000);
-
-  healthServer = app.listen(port, "0.0.0.0", () => {
-    console.log(`[Health] Listening on port ${port}`);
-  });
-
   try {
-    await bot.init();
-
-    console.log(
-      `[PrimeX-Bot] Initialized as @${bot.botInfo.username}`
+    server = app.listen(
+      Number(config.hosting?.port || 3000),
+      "0.0.0.0",
+      () => console.log("[Health] Server started.")
     );
 
+    if (config.database?.enabled === true) {
+      await initDatabase();
+    }
+
+    await bot.init();
+
     loadEvents(bot);
+    registerBusinessEvents(bot);
 
     await bot.start({
       allowed_updates: [
@@ -57,36 +54,33 @@ async function start() {
         "edited_business_message",
         "deleted_business_messages"
       ],
-      onStart: () => {
-        console.log("[PrimeX-Bot] Polling started.");
+      onStart: (info) => {
+        console.log(`[PrimeX-Bot] Started as @${info.username}`);
       }
     });
   } catch (error) {
-    console.error(
-      "[PrimeX-Bot] Startup failed:",
-      error
-    );
-
+    console.error("[Startup]", error);
     await shutdown();
     process.exitCode = 1;
   }
 }
 
 async function shutdown() {
-  if (shuttingDown) return;
-
-  shuttingDown = true;
+  if (stopping) return;
+  stopping = true;
 
   try {
     await bot.stop();
-  } catch (error) {
-    console.error("[Shutdown] Bot stop:", error.message);
+  } catch {}
+
+  if (server) {
+    await new Promise((resolve) => server.close(resolve));
   }
 
-  if (healthServer) {
-    await new Promise((resolve) => {
-      healthServer.close(resolve);
-    });
+  try {
+    await closeDatabase();
+  } catch (error) {
+    console.error("[Database shutdown]", error.message);
   }
 }
 
