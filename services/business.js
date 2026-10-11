@@ -1,34 +1,51 @@
 const config = require("../core/config");
+const { getRuntime } = require("../core/runtime");
+const logger = require("../utils/logger");
 
 function registerBusinessEvents(bot) {
-  if (config.features?.business !== true) return;
-
   bot.on("business_connection", async (ctx) => {
-    const connection = ctx.businessConnection;
+    const connection = ctx.update.business_connection;
 
-    console.log(
-      "[Business] Connection update:",
-      connection.id,
-      connection.is_enabled
+    logger.info(
+      `Business connection updated: ${connection.id}; enabled=${connection.is_enabled}`
     );
   });
 
   bot.on("business_message", async (ctx) => {
-    if (config.business?.enabled !== true) return;
-    if (config.business?.autoReply !== true) return;
+    const message = ctx.update.business_message;
 
-    const message = ctx.businessMessage;
+    if (!message || !message.chat) return;
 
-    if (!message?.text || message.from?.is_bot) return;
+    const runtime = getRuntime();
 
-    console.log(
-      "[Business] Message received:",
-      message.chat.id
+    if (!runtime.features.business) return;
+
+    logger.info(
+      `Business message received: chat=${message.chat.id}, message=${message.message_id}`
     );
 
-    // Add permission-aware business automation here.
-    // Do not automatically reply to every message.
+    const autoReply =
+      runtime.business.autoReply === true &&
+      runtime.features.businessAutoReply === true;
+
+    if (!autoReply || !message.text || message.from?.is_bot) return;
+
+    const replyText =
+      runtime.business.replyText ||
+      config.business.replyText ||
+      "ধন্যবাদ! আপনার মেসেজ পেয়েছি।";
+
+    try {
+      await ctx.api.sendMessage(message.chat.id, replyText, {
+        business_connection_id: message.business_connection_id,
+        reply_parameters: {
+          message_id: message.message_id
+        }
+      });
+    } catch (error) {
+      logger.error(`Business auto-reply failed: ${error.message}`);
+    }
   });
 }
 
-module.exports = { registerBusinessEvents };
+module.exports = registerBusinessEvents;
