@@ -1,56 +1,38 @@
-
 const fs = require("fs");
 const path = require("path");
+const logger = require("../utils/logger");
 
-function loadEvents(bot) {
-  const eventsPath = path.join(
-    __dirname,
-    "..",
-    "app",
-    "events"
-  );
+async function loadEvents(bot) {
+  const eventsPath = path.join(__dirname, "..", "app", "events");
 
   if (!fs.existsSync(eventsPath)) {
-    throw new Error("[EventLoader] app/events directory not found.");
+    logger.info("No events directory found.");
+    return;
   }
 
   const files = fs.readdirSync(eventsPath)
-    .filter(file => file.endsWith(".js"))
-    .sort();
-
-  const registered = [];
+    .filter((file) => file.endsWith(".js"));
 
   for (const file of files) {
     const filePath = path.join(eventsPath, file);
 
     try {
+      delete require.cache[require.resolve(filePath)];
+
       const event = require(filePath);
 
-      if (
-        !event.config ||
-        typeof event.config.name !== "string" ||
-        typeof event.register !== "function"
-      ) {
-        throw new Error(
-          "Event must export config.name and register(bot)."
-        );
+      if (!event || typeof event.register !== "function") {
+        logger.error(`Invalid event module: ${file}`);
+        continue;
       }
 
       event.register(bot);
-      registered.push(event.config.name);
-
-      console.log(`[EventLoader] Registered ${event.config.name}`);
+      logger.info(`Loaded event: ${event.name || file}`);
     } catch (error) {
-      console.error(`[EventLoader] Failed ${file}:`, error.message);
+      logger.error(`Failed to load event ${file}: ${error.message}`);
       throw error;
     }
   }
-
-  console.log(
-    `[EventLoader] Registered ${registered.length} events.`
-  );
-
-  return registered;
 }
 
-module.exports = { loadEvents };
+module.exports = loadEvents;
