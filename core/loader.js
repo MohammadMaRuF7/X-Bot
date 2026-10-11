@@ -11,6 +11,7 @@ function loadCommands() {
   );
 
   const commands = new Map();
+  const loadedFiles = [];
 
   if (!fs.existsSync(commandsPath)) {
     fs.mkdirSync(commandsPath, { recursive: true });
@@ -25,17 +26,25 @@ function loadCommands() {
     const filePath = path.join(commandsPath, file);
 
     try {
-      delete require.cache[require.resolve(filePath)];
-
       const command = require(filePath);
       const meta = command.config;
 
       if (
-        !meta?.name ||
+        !meta ||
+        typeof meta.name !== "string" ||
+        !meta.name.trim() ||
         typeof command.execute !== "function"
       ) {
-        console.warn(`[Loader] Invalid command: ${file}`);
-        continue;
+        throw new Error(
+          "Command requires config.name and an execute function."
+        );
+      }
+
+      if (
+        meta.role !== undefined &&
+        ![0, 1, 2].includes(Number(meta.role))
+      ) {
+        throw new Error("Command role must be 0, 1, or 2.");
       }
 
       const names = [
@@ -43,21 +52,39 @@ function loadCommands() {
         ...(Array.isArray(meta.aliases) ? meta.aliases : [])
       ];
 
-      for (const name of names) {
-        const key = String(name).toLowerCase();
-
-        if (commands.has(key)) {
-          throw new Error(`Duplicate command or alias: ${key}`);
+      const normalized = names.map(name => {
+        if (typeof name !== "string" || !name.trim()) {
+          throw new Error("Command names and aliases must be non-empty strings.");
         }
 
-        commands.set(key, command);
+        return name.trim().toLowerCase();
+      });
+
+      if (new Set(normalized).size !== normalized.length) {
+        throw new Error("Duplicate names or aliases in command metadata.");
       }
 
+      for (const name of normalized) {
+        if (commands.has(name)) {
+          throw new Error(`Command name or alias already registered: ${name}`);
+        }
+      }
+
+      for (const name of normalized) {
+        commands.set(name, command);
+      }
+
+      loadedFiles.push(file);
       console.log(`[Loader] Loaded ${meta.name}`);
     } catch (error) {
       console.error(`[Loader] ${file}: ${error.message}`);
+      throw error;
     }
   }
+
+  console.log(
+    `[Loader] Registered ${loadedFiles.length} command files.`
+  );
 
   return commands;
 }
