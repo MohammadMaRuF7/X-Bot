@@ -1,8 +1,7 @@
-
 {
   "name": "primex-bot",
   "version": "1.0.0",
-  "description": "A modular multilingual Telegram bot with Business automation support",
+  "description": "PrimeX Telegram Bot",
   "main": "index.js",
   "type": "commonjs",
   "engines": {
@@ -13,7 +12,6 @@
   },
   "dependencies": {
     "express": "^5.1.0",
-    "grammy": "^1.38.3",
-    "pg": "^8.16.3"
+    "grammy": "^1.38.3"
   }
 }
