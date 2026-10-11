@@ -1,0 +1,19 @@
+
+{
+  "name": "primex-bot",
+  "version": "1.0.0",
+  "description": "A modular multilingual Telegram bot with Business automation support",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "grammy": "^1.38.3",
+    "pg": "^8.16.3"
+  }
+}
