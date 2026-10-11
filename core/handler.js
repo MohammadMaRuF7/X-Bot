@@ -1,35 +1,31 @@
 
 const config = require("./config");
-const { canRun } = require("./permissions");
+const { canRun, isBotAdmin } = require("./permissions");
+const { getText } = require("./language");
 
 function createHandler(commands) {
   return async function handleMessage(ctx) {
     if (!ctx.message?.text || !ctx.from) return;
 
     const text = ctx.message.text.trim();
+    if (!text) return;
+
     const prefix = config.prefix || "!";
-    const senderId = String(ctx.from.id);
+    const admin = isBotAdmin(ctx.from.id);
+    const adminUsePrefix = config.features.adminUsePrefix === true;
 
-    const isAdmin = config.admins
-      .map(String)
-      .includes(senderId);
+    const hasPrefix = text.startsWith(prefix);
+    const prefixRequired = !admin || adminUsePrefix;
 
-    const prefixRequired = !(
-      isAdmin &&
-      config.features?.adminUsePrefix === false
-    );
+    if (prefixRequired && !hasPrefix) return;
 
-    if (prefixRequired && !text.startsWith(prefix)) {
+    if (!prefixRequired && !hasPrefix && text.startsWith("/")) {
       return;
     }
 
-    if (!prefixRequired && !isAdmin) {
-      return;
-    }
-
-    const input = prefixRequired
+    const input = hasPrefix
       ? text.slice(prefix.length).trim()
-      : text.trim();
+      : text;
 
     if (!input) return;
 
@@ -40,9 +36,18 @@ function createHandler(commands) {
 
     const requiredRole = Number(command.config.role ?? 0);
 
-    if (!(await canRun(ctx, requiredRole))) {
+    if (![0, 1, 2].includes(requiredRole)) {
+      console.error(
+        `[Handler] Invalid role for ${command.config.name}`
+      );
+      return;
+    }
+
+    const allowed = await canRun(ctx, requiredRole);
+
+    if (!allowed) {
       await ctx.reply(
-        "You do not have permission to use this command."
+        getText("no_permission", {}, config.language)
       );
       return;
     }
@@ -61,7 +66,7 @@ function createHandler(commands) {
       );
 
       await ctx.reply(
-        "An error occurred while executing this command."
+        getText("command_error", {}, config.language)
       );
     }
   };
