@@ -1,90 +1,86 @@
-
 const express = require("express");
 const { Bot } = require("grammy");
+
 const config = require("./core/config");
-const { loadEvents } = require("./core/eventLoader");
-const { initDatabase, closeDatabase } = require("./database");
-const { registerBusinessEvents } = require("./services/business");
+const loadEvents = require("./core/eventLoader");
+const { loadCommands } = require("./core/loader");
+const registerBusinessEvents = require("./services/business");
+const logger = require("./utils/logger");
 
 const app = express();
 const bot = new Bot(config.botToken);
 
-let server;
-let stopping = false;
-
-app.get(config.hosting?.healthPath || "/health", (req, res) => {
-  res.status(stopping ? 503 : 200).json({
-    success: !stopping,
-    status: stopping ? "shutting_down" : "healthy",
-    bot: config.nickname,
-    timestamp: new Date().toISOString()
+app.get(config.hosting.healthPath || "/health", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    status: "healthy",
+    bot: config.nickname
   });
 });
 
-bot.catch((error) => {
-  console.error("[Telegram]", error.message);
+app.get("/", (_req, res) => {
+  res.status(200).send(`${config.nickname} is running.`);
 });
 
 async function start() {
-  try {
-    server = app.listen(
-      Number(config.hosting?.port || 3000),
-      "0.0.0.0",
-      () => console.log("[Health] Server started.")
-    );
+  await bot.init();
 
-    if (config.database?.enabled === true) {
-      await initDatabase();
-    }
+  await loadCommands();
+  await loadEvents(bot);
 
-    await bot.init();
-
-    loadEvents(bot);
+  if (config.features.business && config.business.enabled) {
     registerBusinessEvents(bot);
-
-    await bot.start({
-      allowed_updates: [
-        "message",
-        "edited_message",
-        "callback_query",
-        "my_chat_member",
-        "chat_member",
-        "business_connection",
-        "business_message",
-        "edited_business_message",
-        "deleted_business_messages"
-      ],
-      onStart: (info) => {
-        console.log(`[PrimeX-Bot] Started as @${info.username}`);
-      }
-    });
-  } catch (error) {
-    console.error("[Startup]", error);
-    await shutdown();
-    process.exitCode = 1;
   }
+
+  if (config.features.healthServer !== false) {
+    const port = Number(config.hosting.port) || 3000;
+
+    app.listen(port, "0.0.0.0", () => {
+      logger.info(`Health server listening on port ${port}`);
+    });
+  }
+
+  await bot.api.deleteWebhook({ drop_pending_updates: false });
+
+  await bot.start({
+    allowed_updates: [
+      "message",
+      "edited_message",
+      "callback_query",
+      "my_chat_member",
+      "chat_member",
+      "business_connection",
+      "business_message",
+      "edited_business_message",
+      "deleted_business_messages"
+    ],
+    onStart: (botInfo) => {
+      logger.info(`Bot started: @${botInfo.username}`);
+    }
+  });
 }
 
-async function shutdown() {
+let stopping = false;
+
+async function shutdown(signal) {
   if (stopping) return;
   stopping = true;
 
+  logger.info(`Received ${signal}; shutting down.`);
+
   try {
     await bot.stop();
-  } catch {}
-
-  if (server) {
-    await new Promise((resolve) => server.close(resolve));
-  }
-
-  try {
-    await closeDatabase();
   } catch (error) {
-    console.error("[Database shutdown]", error.message);
+    logger.error(`Shutdown error: ${error.message}`);
   }
+
+  process.exit(0);
 }
 
-process.once("SIGINT", shutdown);
-process.once("SIGTERM", shutdown);
+process.once("SIGINT", () => shutdown("SIGINT"));
+process.once("SIGTERM", () => shutdown("SIGTERM"));
 
-start();
+start().catch((error) => {
+  logger.error(`Startup failed: ${error.stack || error.message}`);
+  process.exit(1);
+});
