@@ -2,37 +2,41 @@
 const { Pool } = require("pg");
 const config = require("../core/config");
 
-const databaseConfig = config.database || {};
-
 let pool = null;
+let initialized = false;
 
 function getPool() {
-  if (databaseConfig.enabled !== true) {
+  if (config.database?.enabled !== true) {
     throw new Error("Database is disabled in config.json.");
   }
 
   if (pool) return pool;
 
+  const connectionString = config.database.connectionString;
+
   if (
-    !databaseConfig.connectionString ||
-    databaseConfig.connectionString ===
-      "YOUR_POSTGRESQL_CONNECTION_STRING"
+    typeof connectionString !== "string" ||
+    !connectionString.trim() ||
+    connectionString === "YOUR_POSTGRESQL_CONNECTION_STRING"
   ) {
-    throw new Error("PostgreSQL connectionString is not configured.");
+    throw new Error(
+      "Set a valid PostgreSQL connectionString in config.json."
+    );
   }
 
   pool = new Pool({
-    connectionString: databaseConfig.connectionString,
-    ssl: databaseConfig.ssl
+    connectionString,
+    ssl: config.database.ssl
       ? { rejectUnauthorized: false }
       : false,
     max: 10,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000
+    connectionTimeoutMillis: 10000,
+    application_name: "PrimeX-Bot"
   });
 
   pool.on("error", (error) => {
-    console.error("[Database] Idle client error:", error.message);
+    console.error("[Database] Idle connection error:", error.message);
   });
 
   return pool;
@@ -43,7 +47,16 @@ async function query(text, params = []) {
 }
 
 async function initDatabase() {
+  if (config.database?.enabled !== true) {
+    console.log("[Database] Disabled.");
+    return false;
+  }
+
+  if (initialized) return true;
+
   const db = getPool();
+
+  await db.query("SELECT 1");
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -71,16 +84,23 @@ async function initDatabase() {
     );
   `);
 
-  console.log("[Database] Tables initialized.");
+  initialized = true;
+  console.log("[Database] Connected and initialized.");
+
+  return true;
 }
 
 async function closeDatabase() {
   if (!pool) return;
 
   const currentPool = pool;
+
   pool = null;
+  initialized = false;
 
   await currentPool.end();
+
+  console.log("[Database] Connection pool closed.");
 }
 
 module.exports = {
