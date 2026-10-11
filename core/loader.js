@@ -1,92 +1,93 @@
-
 const fs = require("fs");
 const path = require("path");
+const logger = require("../utils/logger");
 
-function loadCommands() {
-  const commandsPath = path.join(
-    __dirname,
-    "..",
-    "app",
-    "commands"
-  );
+const commands = new Map();
+const aliases = new Map();
 
-  const commands = new Map();
-  const loadedFiles = [];
+async function loadCommands() {
+  const commandsPath = path.join(__dirname, "..", "app", "commands");
+
+  commands.clear();
+  aliases.clear();
 
   if (!fs.existsSync(commandsPath)) {
-    fs.mkdirSync(commandsPath, { recursive: true });
+    logger.info("No commands directory found.");
     return commands;
   }
 
   const files = fs.readdirSync(commandsPath)
-    .filter(file => file.endsWith(".js"))
-    .sort();
+    .filter((file) => file.endsWith(".js"));
 
   for (const file of files) {
     const filePath = path.join(commandsPath, file);
 
     try {
+      delete require.cache[require.resolve(filePath)];
+
       const command = require(filePath);
       const meta = command.config;
 
       if (
         !meta ||
         typeof meta.name !== "string" ||
-        !meta.name.trim() ||
         typeof command.execute !== "function"
       ) {
-        throw new Error(
-          "Command requires config.name and an execute function."
-        );
+        logger.error(`Invalid command module: ${file}`);
+        continue;
       }
 
-      if (
-        meta.role !== undefined &&
-        ![0, 1, 2].includes(Number(meta.role))
-      ) {
-        throw new Error("Command role must be 0, 1, or 2.");
+      const name = meta.name.toLowerCase();
+
+      if (commands.has(name) || aliases.has(name)) {
+        logger.error(`Duplicate command name: ${name}`);
+        continue;
       }
 
-      const names = [
-        meta.name,
-        ...(Array.isArray(meta.aliases) ? meta.aliases : [])
-      ];
+      command.config.aliases = Array.isArray(meta.aliases)
+        ? meta.aliases.map((alias) => String(alias).toLowerCase())
+        : [];
 
-      const normalized = names.map(name => {
-        if (typeof name !== "string" || !name.trim()) {
-          throw new Error("Command names and aliases must be non-empty strings.");
+      command.config.role = Number.isInteger(meta.role)
+        ? meta.role
+        : 0;
+
+      commands.set(name, command);
+
+      for (const alias of command.config.aliases) {
+        if (commands.has(alias) || aliases.has(alias)) {
+          logger.error(`Duplicate command alias: ${alias}`);
+          continue;
         }
 
-        return name.trim().toLowerCase();
-      });
-
-      if (new Set(normalized).size !== normalized.length) {
-        throw new Error("Duplicate names or aliases in command metadata.");
+        aliases.set(alias, name);
       }
 
-      for (const name of normalized) {
-        if (commands.has(name)) {
-          throw new Error(`Command name or alias already registered: ${name}`);
-        }
-      }
-
-      for (const name of normalized) {
-        commands.set(name, command);
-      }
-
-      loadedFiles.push(file);
-      console.log(`[Loader] Loaded ${meta.name}`);
+      logger.info(`Loaded command: ${name}`);
     } catch (error) {
-      console.error(`[Loader] ${file}: ${error.message}`);
+      logger.error(`Failed to load command ${file}: ${error.message}`);
       throw error;
     }
   }
 
-  console.log(
-    `[Loader] Registered ${loadedFiles.length} command files.`
-  );
-
   return commands;
 }
 
-module.exports = { loadCommands };
+function getCommand(name) {
+  const key = String(name || "").toLowerCase();
+  const commandName = aliases.get(key) || key;
+
+  return commands.get(commandName) || null;
+}
+
+function getAllCommands() {
+  return [...commands.values()];
+}
+
+module.exports = {
+  loadCommands,
+  getCommand,
+  getAllCommands,
+  commands,
+  aliases
+};
