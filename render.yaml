@@ -1,7 +1,10 @@
+
 services:
-  - type: worker
+  - type: web
     name: primex-bot
     runtime: docker
+    plan: free
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /health
+    autoDeploy: true
