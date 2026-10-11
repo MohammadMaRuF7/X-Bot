@@ -3,33 +3,55 @@ const path = require("path");
 
 const configPath = path.join(__dirname, "..", "config.json");
 
-if (!fs.existsSync(configPath)) {
-  throw new Error("config.json was not found.");
+let config = {};
+
+if (fs.existsSync(configPath)) {
+  try {
+    config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  } catch (error) {
+    throw new Error(`Invalid config.json: ${error.message}`);
+  }
 }
 
-let config;
+const configToken =
+  typeof config.botToken === "string"
+    ? config.botToken.trim()
+    : "";
 
-try {
-  config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-} catch (error) {
-  throw new Error(`Invalid config.json: ${error.message}`);
+const variableToken =
+  typeof process.env.BOT_TOKEN === "string"
+    ? process.env.BOT_TOKEN.trim()
+    : "";
+
+const isPlaceholder = (token) =>
+  !token || token === "YOUR_TELEGRAM_BOT_TOKEN";
+
+const botToken = !isPlaceholder(configToken)
+  ? configToken
+  : variableToken;
+
+if (isPlaceholder(botToken)) {
+  throw new Error(
+    "Bot token missing! Set botToken in config.json or BOT_TOKEN in hosting variables."
+  );
 }
 
-if (
-  typeof config.botToken !== "string" ||
-  !config.botToken.trim() ||
-  config.botToken === "YOUR_TELEGRAM_BOT_TOKEN"
-) {
-  throw new Error("Set a valid botToken in config.json.");
-}
+config.botToken = botToken;
 
-if (!Array.isArray(config.admins)) {
-  config.admins = [];
-}
+config.admins = Array.isArray(config.admins)
+  ? config.admins.map(String)
+  : [];
 
-config.admins = config.admins.map(String);
-config.nickname = config.nickname || "PrimeX Bot";
-config.prefix = config.prefix || "!";
+config.nickname =
+  typeof config.nickname === "string" && config.nickname.trim()
+    ? config.nickname.trim()
+    : "PrimeX Bot";
+
+config.prefix =
+  typeof config.prefix === "string" && config.prefix.length
+    ? config.prefix
+    : "!";
+
 config.language = config.language || "bn";
 
 config.features = {
