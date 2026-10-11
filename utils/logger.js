@@ -1,21 +1,21 @@
-function log(level, message, error) {
-  const timestamp = new Date().toISOString();
-  const output = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+function timestamp() {
+  return new Date().toISOString();
+}
 
-  if (error) {
-    console.error(output, error);
-    return;
-  }
+function write(level, message) {
+  const line = `[${timestamp()}] [${level}] ${message}`;
 
-  if (level === "error") {
-    console.error(output);
+  if (level === "ERROR") {
+    console.error(line);
+  } else if (level === "WARN") {
+    console.warn(line);
   } else {
-    console.log(output);
+    console.log(line);
   }
 }
 
 module.exports = {
-  info: (message) => log("info", message),
-  warn: (message) => log("warn", message),
-  error: (message, error) => log("error", message, error)
+  info: (message) => write("INFO", message),
+  warn: (message) => write("WARN", message),
+  error: (message) => write("ERROR", message)
 };
