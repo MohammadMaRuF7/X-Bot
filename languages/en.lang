@@ -1,0 +1,14 @@
+
+{
+  "welcome": "🎉 Welcome, {name}!\n\nWelcome to {nickname}! 💙\nPlease follow the group rules and enjoy your stay.",
+  "goodbye": "👋 Goodbye, {name}! We hope to see you again.",
+  "no_permission": "⛔ You do not have permission to use this command.",
+  "command_error": "❌ An error occurred while executing this command.",
+  "bot_started": "✅ Bot started successfully.",
+  "ping": "🏓 Pong!\nLatency: {latency} ms",
+  "database_connected": "Database connection established.",
+  "database_disabled": "Database is disabled in configuration.",
+  "language_not_found": "The requested language was not found.",
+  "prefix_updated": "✅ Prefix updated to: {prefix}",
+  "admin_only": "🔒 This bot is currently in admin-only mode."
+}
