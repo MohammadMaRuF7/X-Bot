@@ -1,40 +1,26 @@
 
 const config = require("./config");
 
-function getRole(ctx) {
-  const senderId = String(ctx.from?.id || "");
+const BOT_ADMIN = 2;
+const GROUP_ADMIN = 1;
+const USER = 0;
 
-  if (config.admins.map(String).includes(senderId)) {
-    return 2;
-  }
+function isBotAdmin(userId) {
+  if (!userId) return false;
 
-  if (
-    ctx.chat?.type === "group" ||
-    ctx.chat?.type === "supergroup"
-  ) {
-    const member = ctx.chatMember;
-
-    if (
-      member &&
-      ["administrator", "creator"].includes(member.status)
-    ) {
-      return 1;
-    }
-  }
-
-  return 0;
+  return config.admins.includes(String(userId));
 }
 
-async function resolveRole(ctx) {
-  const senderId = String(ctx.from?.id || "");
+async function getRole(ctx) {
+  if (!ctx.from) return USER;
 
-  if (config.admins.map(String).includes(senderId)) {
-    return 2;
+  if (isBotAdmin(ctx.from.id)) {
+    return BOT_ADMIN;
   }
 
   if (
-    ctx.chat?.type === "group" ||
-    ctx.chat?.type === "supergroup"
+    ctx.chat &&
+    ["group", "supergroup"].includes(ctx.chat.type)
   ) {
     try {
       const member = await ctx.api.getChatMember(
@@ -42,21 +28,37 @@ async function resolveRole(ctx) {
         ctx.from.id
       );
 
-      if (["administrator", "creator"].includes(member.status)) {
-        return 1;
+      if (["creator", "administrator"].includes(member.status)) {
+        return GROUP_ADMIN;
       }
-    } catch {
-      return 0;
+    } catch (error) {
+      console.error(
+        "[Permissions] Could not verify group role:",
+        error.message
+      );
     }
   }
 
-  return 0;
+  return USER;
 }
 
-async function canRun(ctx, requiredRole = 0) {
-  const role = await resolveRole(ctx);
+async function canRun(ctx, requiredRole = USER) {
+  if (!ctx.from) return false;
 
-  if (config.features?.adminOnly && role !== 2) {
+  const role = await getRole(ctx);
+
+  if (
+    config.features.adminOnly === true &&
+    role !== BOT_ADMIN
+  ) {
+    return false;
+  }
+
+  if (
+    requiredRole === GROUP_ADMIN &&
+    !config.features.groupAdminCommands &&
+    role !== BOT_ADMIN
+  ) {
     return false;
   }
 
@@ -64,7 +66,10 @@ async function canRun(ctx, requiredRole = 0) {
 }
 
 module.exports = {
+  USER,
+  GROUP_ADMIN,
+  BOT_ADMIN,
+  isBotAdmin,
   getRole,
-  resolveRole,
   canRun
 };
