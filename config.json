@@ -1,0 +1,39 @@
+
+{
+  "botToken": "YOUR_TELEGRAM_BOT_TOKEN",
+  "nickname": "PrimeX Bot",
+  "prefix": "!",
+  "language": "bn",
+  "admins": [],
+  "apiTokens": {
+    "gemini": "",
+    "other": ""
+  },
+  "database": {
+    "enabled": true,
+    "type": "postgresql",
+    "connectionString": "YOUR_POSTGRESQL_CONNECTION_STRING",
+    "ssl": true
+  },
+  "features": {
+    "multiLanguage": true,
+    "selfListen": true,
+    "botToBot": true,
+    "adminOnly": false,
+    "adminUsePrefix": false,
+    "business": true,
+    "businessAutoReply": true,
+    "healthServer": true,
+    "groupAdminCommands": true,
+    "customPrefix": true
+  },
+  "business": {
+    "enabled": true,
+    "autoReply": true,
+    "allowedUpdates": true
+  },
+  "hosting": {
+    "port": 3000,
+    "healthPath": "/health"
+  }
+}
