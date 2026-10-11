@@ -1,9 +1,8 @@
-
 const config = require("./config");
 
-const BOT_ADMIN = 2;
-const GROUP_ADMIN = 1;
 const USER = 0;
+const GROUP_ADMIN = 1;
+const BOT_ADMIN = 2;
 
 function isBotAdmin(userId) {
   if (!userId) return false;
@@ -12,45 +11,33 @@ function isBotAdmin(userId) {
 }
 
 async function getRole(ctx) {
-  if (!ctx.from) return USER;
+  const userId = ctx.from?.id;
 
-  if (isBotAdmin(ctx.from.id)) {
+  if (isBotAdmin(userId)) {
     return BOT_ADMIN;
   }
 
-  if (
-    ctx.chat &&
-    ["group", "supergroup"].includes(ctx.chat.type)
-  ) {
-    try {
-      const member = await ctx.api.getChatMember(
-        ctx.chat.id,
-        ctx.from.id
-      );
+  if (!ctx.chat || !["group", "supergroup"].includes(ctx.chat.type)) {
+    return USER;
+  }
 
-      if (["creator", "administrator"].includes(member.status)) {
-        return GROUP_ADMIN;
-      }
-    } catch (error) {
-      console.error(
-        "[Permissions] Could not verify group role:",
-        error.message
-      );
+  try {
+    const member = await ctx.api.getChatMember(ctx.chat.id, userId);
+
+    if (["creator", "administrator"].includes(member.status)) {
+      return GROUP_ADMIN;
     }
+  } catch {
+    return USER;
   }
 
   return USER;
 }
 
 async function canRun(ctx, requiredRole = USER) {
-  if (!ctx.from) return false;
-
   const role = await getRole(ctx);
 
-  if (
-    config.features.adminOnly === true &&
-    role !== BOT_ADMIN
-  ) {
+  if (config.features.adminOnly && role !== BOT_ADMIN) {
     return false;
   }
 
