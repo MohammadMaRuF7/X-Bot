@@ -4,16 +4,6 @@
   "prefix": "!",
   "language": "bn",
   "admins": [],
-  "apiTokens": {
-    "gemini": "",
-    "other": ""
-  },
-  "database": {
-    "enabled": true,
-    "type": "postgresql",
-    "connectionString": "YOUR_POSTGRESQL_CONNECTION_STRING",
-    "ssl": true
-  },
   "features": {
     "multiLanguage": true,
     "selfListen": true,
@@ -21,15 +11,16 @@
     "adminOnly": false,
     "adminUsePrefix": false,
     "business": true,
-    "businessAutoReply": true,
+    "businessAutoReply": false,
     "healthServer": true,
     "groupAdminCommands": true,
-    "customPrefix": true
+    "customPrefix": true,
+    "welcome": true
   },
   "business": {
     "enabled": true,
-    "autoReply": true,
-    "allowedUpdates": true
+    "autoReply": false,
+    "replyText": "ধন্যবাদ! আপনার মেসেজ পেয়েছি।"
   },
   "hosting": {
     "port": 3000,
